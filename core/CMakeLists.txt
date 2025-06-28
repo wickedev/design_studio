@@ -11,7 +11,7 @@ if(EMSCRIPTEN)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s ALLOW_MEMORY_GROWTH=1")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s NO_EXIT_RUNTIME=1")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s EXPORTED_RUNTIME_METHODS=['ccall','cwrap']")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s EXPORTED_FUNCTIONS=['_engine_create','_engine_destroy','_engine_initialize','_engine_render','_engine_set_canvas_size','_engine_mouse_down','_engine_mouse_move','_engine_mouse_up','_malloc','_free']")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s EXPORTED_FUNCTIONS=['_engine_create','_engine_destroy','_engine_initialize','_engine_render','_engine_set_canvas_size','_engine_mouse_down','_engine_mouse_move','_engine_mouse_up','_engine_add_rectangle','_engine_set_rectangle_color','_engine_clear_shapes','_malloc','_free']")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s MODULARIZE=1")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s EXPORT_NAME='DesignStudioModule'")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2")
@@ -30,7 +30,11 @@ set(SOURCES
 )
 
 # Create the library
-add_library(design_studio_core ${SOURCES})
+if(EMSCRIPTEN)
+    add_executable(design_studio_core ${SOURCES})
+else()
+    add_library(design_studio_core ${SOURCES})
+endif()
 
 # Set output directory
 set_target_properties(design_studio_core PROPERTIES
@@ -43,9 +47,11 @@ if(EMSCRIPTEN)
     # Output WASM files to frontend public directory
     set_target_properties(design_studio_core PROPERTIES
         SUFFIX ".js"
-        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/../frontend/public"
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/../frontend/public"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/../frontend/public"
+    )
+    # Set output name to match expected module name
+    set_target_properties(design_studio_core PROPERTIES
+        OUTPUT_NAME "DesignStudioModule"
     )
 endif()
 

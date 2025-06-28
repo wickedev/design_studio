@@ -1,6 +1,9 @@
+// Import the WASM module factory
+declare function DesignStudioModule(options?: any): Promise<any>;
+
 declare global {
   interface Window {
-    Module: any;
+    DesignStudioModule: typeof DesignStudioModule;
   }
 }
 
@@ -11,31 +14,42 @@ export class DesignEngine {
   private gl: WebGLRenderingContext | null = null;
 
   async initialize(): Promise<void> {
-    // Load WASM module
-    if (typeof window.Module === 'undefined') {
-      // For now, we'll simulate the WASM module
-      // In production, this would load the actual compiled WASM
-      window.Module = {
-        _engine_create: () => ({ ptr: 12345 }),
-        _engine_destroy: (ptr: any) => {},
-        _engine_initialize: (ptr: any, width: number, height: number) => true,
-        _engine_render: (ptr: any) => {},
-        _engine_set_canvas_size: (ptr: any, width: number, height: number) => {},
-        _engine_mouse_down: (ptr: any, x: number, y: number) => {},
-        _engine_mouse_move: (ptr: any, x: number, y: number) => {},
-        _engine_mouse_up: (ptr: any, x: number, y: number) => {},
-      };
-    }
+    try {
+      // Load the actual WASM module
+      if (!this.wasmModule) {
+        // Load the WASM module script if not already loaded
+        if (typeof window.DesignStudioModule === 'undefined') {
+          await this.loadWasmScript();
+        }
+        
+        // Initialize the WASM module
+        this.wasmModule = await window.DesignStudioModule();
+        console.log('WASM module loaded successfully');
+      }
 
-    this.wasmModule = window.Module;
-    this.enginePtr = this.wasmModule._engine_create();
-    
-    console.log('Design Engine WASM module loaded');
+      // Create engine instance
+      this.enginePtr = this.wasmModule._engine_create();
+      console.log('Design Engine C++ instance created');
+      
+    } catch (error) {
+      console.error('Failed to initialize WASM module:', error);
+      throw error;
+    }
+  }
+
+  private async loadWasmScript(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = '/DesignStudioModule.js';
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('Failed to load WASM script'));
+      document.head.appendChild(script);
+    });
   }
 
   setCanvas(canvas: HTMLCanvasElement): void {
     this.canvas = canvas;
-    this.gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    this.gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl') as WebGLRenderingContext;
     
     if (!this.gl) {
       throw new Error('WebGL not supported');
@@ -76,77 +90,6 @@ export class DesignEngine {
     if (this.wasmModule && this.enginePtr) {
       this.wasmModule._engine_render(this.enginePtr);
     }
-
-    // For now, draw a simple test pattern
-    this.drawTestPattern();
-  }
-
-  private drawTestPattern(): void {
-    if (!this.gl || !this.canvas) return;
-
-    // Simple test pattern using WebGL
-    const vertices = new Float32Array([
-      -0.5, -0.5,
-       0.5, -0.5,
-       0.0,  0.5
-    ]);
-
-    const vertexBuffer = this.gl.createBuffer();
-    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, vertexBuffer);
-    this.gl.bufferData(this.gl.ARRAY_BUFFER, vertices, this.gl.STATIC_DRAW);
-
-    // Basic vertex shader
-    const vertexShaderSource = `
-      attribute vec2 a_position;
-      void main() {
-        gl_Position = vec4(a_position, 0.0, 1.0);
-      }
-    `;
-
-    // Basic fragment shader
-    const fragmentShaderSource = `
-      precision mediump float;
-      void main() {
-        gl_FragColor = vec4(0.2, 0.4, 0.8, 1.0);
-      }
-    `;
-
-    const vertexShader = this.createShader(this.gl.VERTEX_SHADER, vertexShaderSource);
-    const fragmentShader = this.createShader(this.gl.FRAGMENT_SHADER, fragmentShaderSource);
-
-    if (vertexShader && fragmentShader) {
-      const program = this.gl.createProgram();
-      if (program) {
-        this.gl.attachShader(program, vertexShader);
-        this.gl.attachShader(program, fragmentShader);
-        this.gl.linkProgram(program);
-        this.gl.useProgram(program);
-
-        const positionLocation = this.gl.getAttribLocation(program, 'a_position');
-        this.gl.enableVertexAttribArray(positionLocation);
-        this.gl.vertexAttribPointer(positionLocation, 2, this.gl.FLOAT, false, 0, 0);
-
-        this.gl.drawArrays(this.gl.TRIANGLES, 0, 3);
-      }
-    }
-  }
-
-  private createShader(type: number, source: string): WebGLShader | null {
-    if (!this.gl) return null;
-
-    const shader = this.gl.createShader(type);
-    if (!shader) return null;
-
-    this.gl.shaderSource(shader, source);
-    this.gl.compileShader(shader);
-
-    if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
-      console.error('Shader compilation error:', this.gl.getShaderInfoLog(shader));
-      this.gl.deleteShader(shader);
-      return null;
-    }
-
-    return shader;
   }
 
   onMouseDown(x: number, y: number): void {
@@ -167,6 +110,33 @@ export class DesignEngine {
       this.wasmModule._engine_mouse_up(this.enginePtr, x, y);
     }
     console.log(`Mouse up: ${x}, ${y}`);
+  }
+
+  // Rectangle drawing functions
+  addRectangle(x: number, y: number, width: number, height: number): number {
+    if (this.wasmModule && this.enginePtr) {
+      const index = this.wasmModule._engine_add_rectangle(this.enginePtr, x, y, width, height);
+      console.log(`Added rectangle ${index} at (${x}, ${y}) size ${width}x${height}`);
+      this.render(); // Re-render after adding rectangle
+      return index;
+    }
+    return -1;
+  }
+
+  setRectangleColor(index: number, r: number, g: number, b: number, a: number = 1.0): void {
+    if (this.wasmModule && this.enginePtr) {
+      this.wasmModule._engine_set_rectangle_color(this.enginePtr, index, r, g, b, a);
+      console.log(`Set rectangle ${index} color to (${r}, ${g}, ${b}, ${a})`);
+      this.render(); // Re-render after color change
+    }
+  }
+
+  clearShapes(): void {
+    if (this.wasmModule && this.enginePtr) {
+      this.wasmModule._engine_clear_shapes(this.enginePtr);
+      console.log('Cleared all shapes');
+      this.render(); // Re-render after clearing
+    }
   }
 
   destroy(): void {

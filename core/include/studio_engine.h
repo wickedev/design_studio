@@ -32,6 +32,21 @@ public:
     virtual Rect getBounds() const = 0;
 };
 
+class Rectangle : public Shape {
+public:
+    Rectangle(float x, float y, float width, float height);
+    void render(RenderContext* context) override;
+    Rect getBounds() const override;
+    
+    void setPosition(float x, float y);
+    void setSize(float width, float height);
+    void setColor(float r, float g, float b, float a = 1.0f);
+    
+private:
+    Rect bounds;
+    struct Color { float r, g, b, a; } color;
+};
+
 class DesignEngine {
 public:
     DesignEngine();
@@ -44,6 +59,10 @@ public:
     void addShape(std::unique_ptr<Shape> shape);
     void removeShape(size_t index);
     void clearShapes();
+    
+    // Rectangle drawing functions
+    size_t addRectangle(float x, float y, float width, float height);
+    void setRectangleColor(size_t index, float r, float g, float b, float a = 1.0f);
     
     // WebAssembly interface
     void setCanvasSize(int width, int height);
@@ -58,14 +77,19 @@ private:
 
 // C interface for WebAssembly
 extern "C" {
-    DesignEngine* engine_create();
-    void engine_destroy(DesignEngine* engine);
-    bool engine_initialize(DesignEngine* engine, int width, int height);
-    void engine_render(DesignEngine* engine);
-    void engine_set_canvas_size(DesignEngine* engine, int width, int height);
-    void engine_mouse_down(DesignEngine* engine, float x, float y);
-    void engine_mouse_move(DesignEngine* engine, float x, float y);
-    void engine_mouse_up(DesignEngine* engine, float x, float y);
+    studio::DesignEngine* engine_create();
+    void engine_destroy(studio::DesignEngine* engine);
+    bool engine_initialize(studio::DesignEngine* engine, int width, int height);
+    void engine_render(studio::DesignEngine* engine);
+    void engine_set_canvas_size(studio::DesignEngine* engine, int width, int height);
+    void engine_mouse_down(studio::DesignEngine* engine, float x, float y);
+    void engine_mouse_move(studio::DesignEngine* engine, float x, float y);
+    void engine_mouse_up(studio::DesignEngine* engine, float x, float y);
+    
+    // Rectangle functions
+    size_t engine_add_rectangle(studio::DesignEngine* engine, float x, float y, float width, float height);
+    void engine_set_rectangle_color(studio::DesignEngine* engine, size_t index, float r, float g, float b, float a);
+    void engine_clear_shapes(studio::DesignEngine* engine);
 }
 
 }
